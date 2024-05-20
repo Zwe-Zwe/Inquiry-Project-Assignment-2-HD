@@ -74,7 +74,8 @@ $sql_user = "CREATE TABLE IF NOT EXISTS users (
     id INT AUTO_INCREMENT PRIMARY KEY,
     userid VARCHAR(255) NOT NULL UNIQUE,
     email VARCHAR(255) NOT NULL UNIQUE,
-    password VARCHAR(255) NOT NULL
+    password VARCHAR(255) NOT NULL,
+    password_hashed VARCHAR(255) NOT NULL
 )";
 if (!mysqli_query($conn, $sql_user)) {
     echo "Error creating table: " . mysqli_error($conn);
@@ -102,6 +103,7 @@ if (!mysqli_query($conn, $sql_enquiry)) {
 $sql_feedback = "CREATE TABLE IF NOT EXISTS activity_feedbacks (
     id INT(6) UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     activity_id INT(6) UNSIGNED,
+    userid VARCHAR(255),
     feedback TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )";
@@ -136,7 +138,7 @@ if ($count == 0) {
             </ul>
         </div>
         <br />
-        <hr class=\"activity_line\" />
+       
         <p>In addition to purchasing coupons for the bazaar above, you can also:-</p>
         <div class=\"unordered\">
             <ol id=\"activity_addition\">
@@ -146,7 +148,7 @@ if ($count == 0) {
             </ol>
         </div>
         <br />
-        <hr class=\"activity_line\" />
+        
         <p>If you are interested in supporting, please contact the person in charge:-</p>
         <div class=\"unordered\">
             <ul>
@@ -155,7 +157,7 @@ if ($count == 0) {
             </ul>
         </div>
         <br />
-        <hr class=\"activity_line\" />
+        
         <dl>
             <dt>&#91;SSD Charity Food Fair 2024&#93;</dt>
             <dd>
@@ -179,7 +181,7 @@ if ($count == 0) {
                 </table>
             </dd>
         </dl>
-        <iframe src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3988.411045755735!2d110.34421479999999!3d1.5218199!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31fba76940665d95%3A0xd41d7f8c99537582!2sAssociation%20of%20Churches%20in%20Sarawak!5e0!3m2!1sen!2smy!4v1710830899080!5m2!1sen!2smy\" allowfullscreen=\"\" loading=\"lazy\" referrerpolicy=\"no-referrer-when-downgrade\"></iframe>',
+        <iframe id = \"googl-emap\" src=\"https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3988.411045755735!2d110.34421479999999!3d1.5218199!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x31fba76940665d95%3A0xd41d7f8c99537582!2sAssociation%20of%20Churches%20in%20Sarawak!5e0!3m2!1sen!2smy!4v1710830899080!5m2!1sen!2smy\" allowfullscreen=\"\" loading=\"lazy\" referrerpolicy=\"no-referrer-when-downgrade\"></iframe>',
         'charity.jpg'
     ),
     (
@@ -211,13 +213,15 @@ $sql_check = "SELECT COUNT(*) AS count FROM users";
 $result = mysqli_query($conn, $sql_check);
 $row = mysqli_fetch_assoc($result);
 $count = $row['count'];
-$password = password_hash('password', PASSWORD_BCRYPT);
+$password = 'admin';
+$password_hashed = password_hash($password, PASSWORD_BCRYPT);
 if ($count == 0) {
-    $sql = "INSERT IGNORE users (userid, email, password) VALUES
-    ('admin', 'admin@gmail.com', '$password')";
+    $sql = "INSERT IGNORE users (userid, email, password, password_hashed) VALUES
+    ('admin', 'admin@gmail.com', '$password','$password_hashed')";
     if (!mysqli_query($conn, $sql)) {
         echo "Error inserting data: " . mysqli_error($conn);
     }
 }
+
 
 ?>

@@ -70,8 +70,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $hashed_password = password_hash($password, PASSWORD_BCRYPT);
 
     // Prepare and bind
-    $stmt = $conn->prepare("INSERT INTO users (userid, email, password) VALUES (?, ?, ?)");
-    $stmt->bind_param("sss", $userid, $email, $hashed_password);
+    $stmt = $conn->prepare("INSERT INTO users (userid, email, password, password_hashed) VALUES (?, ?, ?,?)");
+    $stmt->bind_param("ssss", $userid, $email, $password, $hashed_password);
 
     // Execute the statement
     if ($stmt->execute()) {

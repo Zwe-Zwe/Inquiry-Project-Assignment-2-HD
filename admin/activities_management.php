@@ -2,22 +2,40 @@
 
 include "../connection.php";
 
-$id = $userid = $email = $password = $error ="";
+$id = $title = $date= $description = $photo = $error ="";
 
 // Check if form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['cancel'])) {
-        header("Location: index.php");
+        header("Location: activities_management.php");
         exit();
     } else if (isset($_POST['submit']) && $_POST['submit'] == 'Update') {
         $id = $_POST["id"];
-        $userid = $_POST["userid"];
-        $email = $_POST["email"];
-        $password = $_POST["password"];
+        $title = $_POST["title"];
+        $date = $_POST["date"];
+        $description = $_POST["description"];
+        $photo = $_POST["photo"];
 
-        $sql = "UPDATE users SET userid=?, email=?, password=? WHERE id=?";
+        if (isset($_FILES["photo"]) && $_FILES["photo"]["error"] == 0) {
+            $target_dir = "../images/";
+            $target_file = $target_dir . basename($_FILES["photo"]["name"]);
+            $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+
+            $allowed_types = ["jpg", "jpeg", "png", "gif"];
+            if (in_array($imageFileType, $allowed_types)) {
+                if (move_uploaded_file($_FILES["photo"]["tmp_name"], $target_file)) {
+                    $photo = basename($_FILES["photo"]["name"]);
+                } else {
+                    $error = "Sorry, there was an error uploading your file.";
+                }
+            } else {
+                $error = "Sorry, only JPG, JPEG, PNG & GIF files are allowed.";
+            }
+        }
+
+        $sql = "UPDATE activities SET title=?, date=?, description=?, photo=? WHERE id=?";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sssi",$userid, $email, $password, $id);
+        $stmt->bind_param("ssssi", $title, $date, $description, $photo, $id);
         $stmt->execute();
 
         if ($stmt->affected_rows > 0) {
@@ -28,18 +46,36 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         $stmt->close();
     } else if (isset($_POST['submit']) && $_POST['submit'] == 'Create') {
-        $userid = $_POST["userid"];
-        $email = $_POST["email"];
-        $password = $_POST["password"];
+        $title = $_POST["title"];
+        $date = $_POST["date"];
+        $description = $_POST["description"];
+        $photo = $_POST['photo'];
 
-        $sql = "INSERT INTO users (userid, email, password) VALUES (?, ?, ?)";
+        if (isset($_FILES["photo"]) && $_FILES["photo"]["error"] == 0) {
+            $target_dir = "../images/";
+            $target_file = $target_dir . basename($_FILES["photo"]["name"]);
+            $imageFileType = strtolower(pathinfo($target_file, PATHINFO_EXTENSION));
+
+            $allowed_types = ["jpg", "jpeg", "png", "gif"];
+            if (in_array($imageFileType, $allowed_types)) {
+                if (move_uploaded_file($_FILES["photo"]["tmp_name"], $target_file)) {
+                    $photo = basename($_FILES["photo"]["name"]);
+                } else {
+                    $error = "Sorry, there was an error uploading your file.";
+                }
+            } else {
+                $error = "Sorry, only JPG, JPEG, PNG & GIF files are allowed.";
+            }
+        }
+
+        $sql = "INSERT INTO activities (title, date, description, photo) VALUES (?, ?, ?, ?)";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sss", $userid, $email, $password);
+        $stmt->bind_param("ssss", $title, $date, $description, $photo);
         if ($stmt->execute()) {
             header("Location: index.php");
             exit();
         } else {
-            $error = "Error creating user.";
+            $error = "Error creating activity.";
         }
         $stmt->close();
     }
@@ -50,21 +86,21 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
         $id = $_GET['id'];
 
         // Delete the row
-        $sql_delete = "DELETE FROM users WHERE id=?";
+        $sql_delete = "DELETE FROM activities WHERE id=?";
         $stmt_delete = $conn->prepare($sql_delete);
         $stmt_delete->bind_param("i", $id);
         $stmt_delete->execute();
         $stmt_delete->close();
 
         // Retrieve IDs of rows with IDs greater than the deleted row's ID
-        $sql_get_higher_ids = "SELECT id FROM users WHERE id > ?";
+        $sql_get_higher_ids = "SELECT id FROM activities WHERE id > ?";
         $stmt_get_higher_ids = $conn->prepare($sql_get_higher_ids);
         $stmt_get_higher_ids->bind_param("i", $id);
         $stmt_get_higher_ids->execute();
         $result_higher_ids = $stmt_get_higher_ids->get_result();
         
         // Decrement each ID by 1 and update the database
-        $sql_update_ids = "UPDATE users SET id = id - 1 WHERE id = ?";
+        $sql_update_ids = "UPDATE activities SET id = id - 1 WHERE id = ?";
         $stmt_update_ids = $conn->prepare($sql_update_ids);
         while ($row_higher_ids = $result_higher_ids->fetch_assoc()) {
             $stmt_update_ids->bind_param("i", $row_higher_ids['id']);
@@ -72,26 +108,43 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
         }
 
 
-        $sql_reset_auto_increment = "ALTER TABLE users AUTO_INCREMENT = 1";
+        $sql_reset_auto_increment = "ALTER TABLE activities AUTO_INCREMENT = 1";
         $conn->query($sql_reset_auto_increment);
 
-        header('Location: index.php');
+        header('Location: activities_management.php');
         exit();
     } else if ($_GET['action'] == 'edit' && isset($_GET['id'])) {
         $id = $_GET['id'];
-        $sql = "SELECT * FROM users WHERE id=?";
+        $sql = "SELECT * FROM activities WHERE id=?";
         $stmt = $conn->prepare($sql);
         $stmt->bind_param("i", $id);
         $stmt->execute();
         $result = $stmt->get_result();
         $row = $result->fetch_assoc();
         if ($row) {
-            $userid = $row["userid"];
-            $email = $row["email"];
-            $password = $row["password"];
+            $title = $row["title"];
+            $date = $row["date"];
+            $description = $row["description"];
+            $photo = $row["photo"];
+        }
+        $stmt->close();
+    } else if ($_GET['action'] == 'view' && isset($_GET['id'])) {
+        $id = $_GET['id'];
+        $sql = "SELECT * FROM activities WHERE id=?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $row = $result->fetch_assoc();
+        if ($row) {
+            $title = $row["title"];
+            $date = $row["date"];
+            $description = $row["description"];
+            $photo = $row["photo"];
         }
         $stmt->close();
     }
+    
 }
 
 
@@ -122,7 +175,7 @@ if (isset($_GET['sort']) && ($_GET['sort'] == 'asc' || $_GET['sort'] == 'desc'))
 }
 
 // Construct SQL query based on $sortBy and $sortOrder
-$sql = "SELECT * FROM users ORDER BY $sortBy $sortOrder";
+$sql = "SELECT * FROM activities ORDER BY $sortBy $sortOrder";
 $result = $conn->query($sql);
 ?>
 
@@ -152,38 +205,37 @@ $result = $conn->query($sql);
             <div class="logo"><img src="../images/logo2.png"></div>
             <nav>
                 <ul>
-                    <li><a id="current_tab" href="#">User Management</a></li>
+                    <li><a href="index.php">User Management</a></li>
                     <li><a href="#">Enquiry Forms</a></li> 
                     <li><a href="#">Volunteer Forms</a></li>
-                    <li><a href="activities_management.php">Activities</a></li>
+                    <li><a id="current_tab" href="activities_management.php">Activities</a></li>
                     <li><a href="feedback_management.php">Feedbacks</a></li>
                 </ul>
             </nav>
         </aside>
         <main>
             <section class="user-management">
-            <h1>User Management</h1>
+            <h1>Activity Management</h1>
                 <div id="table_top">                  
                     <div class="dropdown">
                     <button class="dropbtn">Sort By: <?php echo strtoupper($sortBy); ?></button>
                         <div class="dropdown-content">
                             <a href="?sortBy=id">ID</a>
-                            <a href="?sortBy=userid">UserID</a>
-                            <a href="?sortBy=email">Email</a>
+                            <a href="?sortBy=title">TITLE</a>
+                            <a href="?sortBy=date">DATE</a>
                         </div>
                     </div>
                     <a class="sort_logout" href="?sort=asc&sortBy=<?php echo $sortBy; ?>">Sort Ascending</a>
                     <a class="sort_logout" href="?sort=desc&sortBy=<?php echo $sortBy; ?>">Sort Descending</a>
-                    <a class="sort_logout" href="index.php?action=add">Add New User</a>  
+                    <a class="sort_logout" href="activities_management.php?action=add">Add New Activty</a>  
                     <a class="sort_logout" href="../index.php">Logout</a>
                 </div>    
                 <table>
                     
                         <tr>
                             <th>ID</th>
-                            <th>UserID</th>
-                            <th>Password</th>
-                            <th>Email</th>
+                            <th>Title</th>
+                            <th>Date</th>
                             <th>Action</th>
                         </tr>
                         
@@ -197,18 +249,12 @@ $result = $conn->query($sql);
                             echo "
                             <tr>
                                 <td>{$row['id']}</td>
-                                <td>{$row['userid']}</td>
-                                <td>{$row['password']}</td>
-                                <td>{$row['email']}</td>  <td>  ";
-
-                                if ($row['userid'] != 'admin') {
-                                echo "
-                               
-                                
-                                    <a id='edit-button' href='index.php?action=edit&id={$row['id']}'>Edit</a>
-                                    <a id='delete-button' href='index.php?action=delete&id={$row['id']}'>Delete</a>";
-                                }
-                                echo"
+                                <td>{$row['title']}</td>
+                                <td>{$row['date']}</td>
+                                <td>
+                                    <a id='edit-button' href='activities_management.php?action=view&id={$row['id']}'>View</a>                                
+                                    <a id='edit-button' href='activities_management.php?action=edit&id={$row['id']}'>Edit</a>
+                                    <a id='delete-button' href='activities_management.php?action=delete&id={$row['id']}'>Delete</a>
                                 </td>
                             </tr>
                             ";
@@ -225,23 +271,45 @@ $result = $conn->query($sql);
     
                 </table>
                 <?php if (isset($_GET['action']) && ($_GET['action'] == 'add' || ($_GET['action'] == 'edit' && isset($_GET['id'])))): ?>
-                <div id="user-edit" class="pop-up" style="display: flex;">
-                    <div class="pop-up-content">
-                        <a class="close-btn" href="index.php">&times;</a>
+                <div id="user-edit" class="pop-up">
+                    <div class="pop-up-content-activity">
+                        <a class="close-btn" href="activities_management.php">&times;</a>
                         <form method="post">
                             <h1><?php echo $_GET['action'] == 'edit' ? 'Update User\'s Info' : 'Create New User'; ?></h1>
                             <?php if ($_GET['action'] == 'edit'): ?>
                                 <input type="hidden" name="id" value="<?php echo htmlspecialchars($id); ?>">
                             <?php endif; ?>
-                            <label for="userid"> USER ID: </label>
-                            <input type="text" name="userid" id="userid" value="<?php echo htmlspecialchars($userid); ?>"> <br>
-                            <label for="email1"> EMAIL: </label>
-                            <input type="text" name="email" id="email1" value="<?php echo htmlspecialchars($email); ?>"> <br>
-                            <label for="password"> PASSWORD: </label>
-                            <input type="text" name="password" id="password" value="<?php echo htmlspecialchars($password); ?>"> <br>
+                            <label for="title"> Title: </label>
+                            <input type="text" name="title" id="title" value="<?php echo htmlspecialchars($title); ?>"> <br>
+                            <label for="email1"> Date: (DD/MM/YYYY) </label>
+                            <input type="text" name="date" id="date" value="<?php echo htmlspecialchars($date); ?>"> <br>
+                            <label for="description"> Description:</label>
+                            <textarea rows="10" cols="76" name="description" id="description"><?php echo htmlspecialchars($description); ?></textarea> <br>
+                            <label for="photo">Photo: </label>
+                            <?php if (isset($_GET['action']) && $_GET['action'] == 'edit') { ?>
+                                <img src="../images/<?php echo htmlspecialchars($photo); ?>" alt="activity_image" id="display_img" /><br>
+                            <?php } ?>
+                            <input type="file" id="photo" name="photo"> <br>
                             <input type="submit" name="submit" value="<?php echo $_GET['action'] == 'edit' ? 'Update' : 'Create'; ?>">
                             <input type="submit" name="cancel" value="Cancel">
                         </form>
+                    </div>
+                </div>
+                <?php endif; ?>
+
+                <?php if (isset($_GET['action']) && ($_GET['action'] == 'view'&& isset($_GET['id']))): ?>
+                <div id="user-edit" class="pop-up">
+                    <div class="pop-up-content-activity">
+                        <a class="close-btn" href="activities_management.php">&times;</a>
+                        <form method="post">
+                            
+                            <h1><?php echo $title; ?></h1> <br>  
+                            <p><?php echo $date; ?></p> <br>
+                            <p><?php echo $description; ?></p> <br>
+                                                      
+                            <img src="../images/<?php echo htmlspecialchars($photo); ?>" alt="activity_image" id="display_img" /><br>   
+                            <input type="submit" name="cancel" value="Cancel">  
+                         </form>                     
                     </div>
                 </div>
                 <?php endif; ?>
