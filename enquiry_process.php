@@ -32,6 +32,7 @@
                     // Final confirmation and insertion into the database
                     $email = $_POST['email'];
                     $phNum = $_POST['phoneNumber'];
+                    $contactMethod = implode(" ,", $_POST['contact_method']);
                     
                     $email_exist = mysqli_query($conn, "SELECT email FROM enquiry_information WHERE email = '$email'");
                     $phNum_exist = mysqli_query($conn, "SELECT phoneNumber FROM enquiry_information WHERE phoneNumber = '$phNum'"); // Changed to phone_number
@@ -41,7 +42,7 @@
 
                     if (empty($errors)) {
                         $stmt = $conn->prepare("INSERT INTO enquiry_information (first_name, last_name, email, countryCode, phoneNumber, service_type, contact_method, appointment_option, appointment_date, appointment_time) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                        $stmt->bind_param("ssssssssss", $_POST['first_name'], $_POST['last_name'], $email, $_POST['countryCode'], $phNum, $_POST['service'], $_POST['contact_method'], $_POST['appointment_option'], $_POST['appointmentDate'], $_POST['appointmentTime']);
+                        $stmt->bind_param("ssssssssss", $_POST['first_name'], $_POST['last_name'], $email, $_POST['countryCode'], $phNum, $_POST['service'], $contactMethod, $_POST['appointment_option'], $_POST['appointmentDate'], $_POST['appointmentTime']);
 
                         if ($stmt->execute()) {
                             header("Location: enquiry-service.php");
@@ -114,7 +115,7 @@
                             echo "<p>Error in $key: " . htmlspecialchars($error) . "</p>";
                         }
                         echo '<a class="enquiry_process_button" href="enquiry-service.php">RETURN</a>';
-                    }
+                    } 
                 }
             }
 

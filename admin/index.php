@@ -43,41 +43,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         }
         $stmt->close();
     }
+
+    else if (isset($_POST['submit']) && $_POST['submit'] == 'delete') {
+        $id = $_POST["id"];
+
+        $sql = "DELETE FROM users WHERE id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $id);
+        if ($stmt->execute()) {
+            // Adjust the auto-increment value
+            $conn->query("ALTER TABLE users AUTO_INCREMENT = 1");
+
+            header("Location: index.php");
+            exit();
+        } else {
+            $error = "Error deleting user.";
+        }
+        $stmt->close();
+    }
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
-    if ($_GET['action'] == 'delete' && isset($_GET['id'])) {
-        $id = $_GET['id'];
-
-        // Delete the row
-        $sql_delete = "DELETE FROM users WHERE id=?";
-        $stmt_delete = $conn->prepare($sql_delete);
-        $stmt_delete->bind_param("i", $id);
-        $stmt_delete->execute();
-        $stmt_delete->close();
-
-        // Retrieve IDs of rows with IDs greater than the deleted row's ID
-        $sql_get_higher_ids = "SELECT id FROM users WHERE id > ?";
-        $stmt_get_higher_ids = $conn->prepare($sql_get_higher_ids);
-        $stmt_get_higher_ids->bind_param("i", $id);
-        $stmt_get_higher_ids->execute();
-        $result_higher_ids = $stmt_get_higher_ids->get_result();
-        
-        // Decrement each ID by 1 and update the database
-        $sql_update_ids = "UPDATE users SET id = id - 1 WHERE id = ?";
-        $stmt_update_ids = $conn->prepare($sql_update_ids);
-        while ($row_higher_ids = $result_higher_ids->fetch_assoc()) {
-            $stmt_update_ids->bind_param("i", $row_higher_ids['id']);
-            $stmt_update_ids->execute();
-        }
-
-
-        $sql_reset_auto_increment = "ALTER TABLE users AUTO_INCREMENT = 1";
-        $conn->query($sql_reset_auto_increment);
-
-        header('Location: index.php');
-        exit();
-    } else if ($_GET['action'] == 'edit' && isset($_GET['id'])) {
+    
+    
+    if ($_GET['action'] == 'edit' && isset($_GET['id'])) {
         $id = $_GET['id'];
         $sql = "SELECT * FROM users WHERE id=?";
         $stmt = $conn->prepare($sql);
@@ -93,6 +82,7 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
         $stmt->close();
     }
 }
+
 
 
 
@@ -145,15 +135,17 @@ $result = $conn->query($sql);
 
     </style>
 </head>
-<body id = management_body>
-    <section id="management">
+<body id = 'management_body'>
     <div class="container">
+    <section id="management">
+    <input type="checkbox" id="menu-toggle" class="menu-toggle">
+    <label for="menu-toggle" class="menu-toggle-label">☰</label>
         <aside class="sidebar">
             <div class="logo"><img src="../images/logo2.png"></div>
             <nav>
                 <ul>
                     <li><a id="current_tab" href="#">User Management</a></li>
-                    <li><a href="#">Enquiry Forms</a></li> 
+                    <li><a href="viewenquiry.php">Enquiry Forms</a></li> 
                     <li><a href="#">Volunteer Forms</a></li>
                     <li><a href="activities_management.php">Activities</a></li>
                     <li><a href="feedback_management.php">Feedbacks</a></li>
@@ -206,7 +198,7 @@ $result = $conn->query($sql);
                                
                                 
                                     <a id='edit-button' href='index.php?action=edit&id={$row['id']}'>Edit</a>
-                                    <a id='delete-button' href='index.php?action=delete&id={$row['id']}'>Delete</a>";
+                                    <a id='delete-button' href='index.php?action=confirm_delete&id={$row['id']}'>Delete</a>";
                                 }
                                 echo"
                                 </td>
@@ -225,26 +217,41 @@ $result = $conn->query($sql);
     
                 </table>
                 <?php if (isset($_GET['action']) && ($_GET['action'] == 'add' || ($_GET['action'] == 'edit' && isset($_GET['id'])))): ?>
-                <div id="user-edit" class="pop-up" style="display: flex;">
-                    <div class="pop-up-content">
-                        <a class="close-btn" href="index.php">&times;</a>
-                        <form method="post">
-                            <h1><?php echo $_GET['action'] == 'edit' ? 'Update User\'s Info' : 'Create New User'; ?></h1>
-                            <?php if ($_GET['action'] == 'edit'): ?>
-                                <input type="hidden" name="id" value="<?php echo htmlspecialchars($id); ?>">
-                            <?php endif; ?>
-                            <label for="userid"> USER ID: </label>
-                            <input type="text" name="userid" id="userid" value="<?php echo htmlspecialchars($userid); ?>"> <br>
-                            <label for="email1"> EMAIL: </label>
-                            <input type="text" name="email" id="email1" value="<?php echo htmlspecialchars($email); ?>"> <br>
-                            <label for="password"> PASSWORD: </label>
-                            <input type="text" name="password" id="password" value="<?php echo htmlspecialchars($password); ?>"> <br>
-                            <input type="submit" name="submit" value="<?php echo $_GET['action'] == 'edit' ? 'Update' : 'Create'; ?>">
-                            <input type="submit" name="cancel" value="Cancel">
-                        </form>
+                    <div id="user-edit" class="pop-up" style="display: flex;">
+                        <div class="pop-up-content">
+                            <a class="close-btn" href="index.php">&times;</a>                            
+                            <form method="post">
+                                <h1><?php echo $_GET['action'] == 'edit' ? 'Update User\'s Info' : 'Create New User'; ?></h1>
+                                <?php if ($_GET['action'] == 'edit'): ?>
+                                    <input type="hidden" name="id" value="<?php echo htmlspecialchars($_GET['id']); ?>">
+                                <?php endif; ?>
+                                <label for="userid"> USER ID: </label>
+                                <input type="text" name="userid" id="userid" value="<?php echo htmlspecialchars($userid); ?>"> <br>
+                                <label for="email1"> EMAIL: </label>
+                                <input type="text" name="email" id="email1" value="<?php echo htmlspecialchars($email); ?>"> <br>
+                                <label for="password"> PASSWORD: </label>
+                                <input type="text" name="password" id="password" value="<?php echo htmlspecialchars($password); ?>"> <br>
+                                <input type="submit" name="submit" value="<?php echo $_GET['action'] == 'edit' ? 'Update' : 'Create'; ?>">
+                                <input type="submit" name="cancel" value="Cancel">
+                            </form>
+                            
+                        </div>
                     </div>
-                </div>
                 <?php endif; ?>
+
+                <?php if(isset($_GET['action']) && ($_GET['action'] == 'confirm_delete' && isset($_GET['id']))) { ?>
+                    <div id="user-edit" class="pop-up" style="display: flex;">
+                        <div class="pop-up-content">
+                            <a class="close-btn" href="index.php">&times;</a>
+                            <form method="post">
+                                <h1>Confrim to Delete!</h1>
+                                <input type="hidden" name="id" value="<?php echo htmlspecialchars($_GET['id']); ?>">
+                                <input type="submit" id='confirm-delete' name="submit" value="delete">
+                                <input type="submit" name="cancel" value="Cancel">
+                            </form>
+                        </div>
+                    </div> 
+                <?php } ?>    
             </section>
         </main>
     </div>
