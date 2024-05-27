@@ -1,7 +1,7 @@
 <a href="index.php"><img src="images/logo.jpg" id="logo"></a>
     <input class="side-menu" type="checkbox" id="side-menu">
     <label class="hamb" for="side-menu"><span class="hamb-line"></span></label>
-    <nav>
+    <nav id="#navigation">
         <a href="index.php"><img src="images/logo.jpg" alt="logo" id="navbar_logo"></a>
         <ul class="navbar">
             <li><a href="index.php">Home</a></li>
