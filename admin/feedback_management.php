@@ -5,40 +5,52 @@ include "../connection.php";
 $id = $userid = $feedback = $created_at = $activity_id = $error ="";
 
 
-if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
-    if ($_GET['action'] == 'delete' && isset($_GET['id'])) {
-        $id = $_GET['id'];
-
-        // Delete the row
-        $sql_delete = "DELETE FROM activity_feedbacks WHERE id=?";
-        $stmt_delete = $conn->prepare($sql_delete);
-        $stmt_delete->bind_param("i", $id);
-        $stmt_delete->execute();
-        $stmt_delete->close();
-
-        // Retrieve IDs of rows with IDs greater than the deleted row's ID
-        $sql_get_higher_ids = "SELECT id FROM activity_feedbacks WHERE id > ?";
-        $stmt_get_higher_ids = $conn->prepare($sql_get_higher_ids);
-        $stmt_get_higher_ids->bind_param("i", $id);
-        $stmt_get_higher_ids->execute();
-        $result_higher_ids = $stmt_get_higher_ids->get_result();
-        
-        // Decrement each ID by 1 and update the database
-        $sql_update_ids = "UPDATE activity_feedbacks SET id = id - 1 WHERE id = ?";
-        $stmt_update_ids = $conn->prepare($sql_update_ids);
-        while ($row_higher_ids = $result_higher_ids->fetch_assoc()) {
-            $stmt_update_ids->bind_param("i", $row_higher_ids['id']);
-            $stmt_update_ids->execute();
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    if (isset($_POST['cancel'])) {
+        header("Location: feedback_management.php");
+        exit(); 
+    }
+    if (isset($_POST['submit']) && $_POST['submit'] == 'delete') {
+        $id = $_POST["id"];
+    
+        // Delete the user
+        $sqlDelete = "DELETE FROM activity_feedbacks WHERE id = ?";
+        $stmtDelete = $conn->prepare($sqlDelete);
+        if ($stmtDelete) {
+            $stmtDelete->bind_param("i", $id);
+            if ($stmtDelete->execute()) {
+                // Close the statement
+                $stmtDelete->close();
+    
+                // Update the IDs of rows with higher IDs
+                $sqlUpdate = "UPDATE activity_feedbacks SET id = id - 1 WHERE id > ?";
+                $stmtUpdate = $conn->prepare($sqlUpdate);
+                if ($stmtUpdate) {
+                    $stmtUpdate->bind_param("i", $id);
+                    $stmtUpdate->execute();
+                    $stmtUpdate->close();
+                } else {
+                    $error = "Error preparing update statement: " . $conn->error;
+                }
+    
+                // Reset the auto-increment value
+                if ($conn->query("ALTER TABLE activity_feedbacks AUTO_INCREMENT = 1")) {
+                    header("Location: feedback_management.php");
+                    exit();
+                } else {
+                    $error = "Error resetting auto-increment value: " . $conn->error;
+                }
+            } else {
+                $error = "Error deleting user: " . $stmtDelete->error;
+            }
+        } else {
+            $error = "Error preparing delete statement: " . $conn->error;
         }
 
-
-        $sql_reset_auto_increment = "ALTER TABLE activity_feedbacks AUTO_INCREMENT = 1";
-        $conn->query($sql_reset_auto_increment);
-
-        header('Location: feedback_management.php');
-        exit();
+        $stmtDelete->close();
     }
 }
+
 
 
 
@@ -49,26 +61,29 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
 // Initialize $sortBy and $sortOrder with default values
 $sortBy = "id";
 $sortOrder = "ASC";
+$search = "";
 
 // Check if sorting order is provided in the URL
-
-
-// Check if sorting column is provided in the URL
 if (isset($_GET['sortBy'])) {
-    // Assign the value from the query string to $sortBy
     $sortBy = $_GET['sortBy'];
-
-    // Additional validation if necessary
-    // For example, you might want to ensure that $sortBy is one of the allowed values
-    // You can use a switch statement or if conditions for this purpose
 }
 
 if (isset($_GET['sort']) && ($_GET['sort'] == 'asc' || $_GET['sort'] == 'desc')) {
     $sortOrder = ($_GET['sort'] == 'desc') ? 'DESC' : 'ASC';
 }
 
-// Construct SQL query based on $sortBy and $sortOrder
-$sql = "SELECT * FROM activity_feedbacks ORDER BY $sortBy $sortOrder";
+// Check if search query is provided in the URL
+if (isset($_GET['search'])) {
+    $search = $conn->real_escape_string($_GET['search']);
+}
+
+// Construct SQL query based on $sortBy, $sortOrder, and $search
+if (!empty($search)) {
+    $sql = "SELECT * FROM activity_feedbacks WHERE userid LIKE '%$search%' ORDER BY $sortBy $sortOrder";
+} else {
+    $sql = "SELECT * FROM activity_feedbacks ORDER BY $sortBy $sortOrder";
+}
+
 $result = $conn->query($sql);
 ?>
 
@@ -98,7 +113,7 @@ $result = $conn->query($sql);
             <div class="logo"><img src="../images/logo2.png"></div>
             <nav>
                 <ul>
-                    <li><a href="index.php">User Management</a></li>
+                    <li><a href="user_management.php">User Management</a></li>
                     <li><a href="#">Enquiry Forms</a></li> 
                     <li><a href="#">Volunteer Forms</a></li>
                     <li><a href="activities_management.php">Activities</a></li>
@@ -109,7 +124,11 @@ $result = $conn->query($sql);
         <main>
             <section class="user-management">
             <h1>Feedback Management</h1>
-                <div id="table_top">                  
+                <div id="table_top"> 
+                <form method="GET" action="feedback_management.php" id="search_form">
+                        <input type="text" name="search" placeholder="Search by UserID" value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>">
+                        <input type="submit" value="Search">
+                    </form>                 
                     <div class="dropdown">
                     <button class="dropbtn">Sort By: <?php echo strtoupper($sortBy); ?></button>
                         <div class="dropdown-content">
@@ -147,7 +166,7 @@ $result = $conn->query($sql);
                                 <td>{$row['userid']}</td>
                                 <td>{$row['feedback']}</td>
                                 <td>{$row['created_at']}</td>
-                                <td><a id='delete-button' href='feedback_management.php?action=delete&id={$row['id']}'>Delete</a></td>              
+                                <td><a id='delete-button' href='feedback_management.php?action=confirm_delete&id={$row['id']}'>Delete</a></td>              
                             </tr>
                             ";
                         
@@ -161,7 +180,20 @@ $result = $conn->query($sql);
         
                         <!-- Continue for other rows -->
     
-                </table>             
+                </table>  
+                <?php if(isset($_GET['action']) && ($_GET['action'] == 'confirm_delete' && isset($_GET['id']))) { ?>
+                    <div id="user-edit" class="pop-up" style="display: flex;">
+                        <div class="pop-up-content">
+                            <a class="close-btn" href="feedback_management.php">&times;</a>
+                            <form method="post">
+                                <h1>Confrim to Delete!</h1>
+                                <input type="hidden" name="id" value="<?php echo htmlspecialchars($_GET['id']); ?>">
+                                <input type="submit" id='confirm-delete' name="submit" value="delete">
+                                <input type="submit" name="cancel" value="Cancel">
+                            </form>
+                        </div>
+                    </div> 
+                <?php } ?>           
             </section>
         </main>
     </div>

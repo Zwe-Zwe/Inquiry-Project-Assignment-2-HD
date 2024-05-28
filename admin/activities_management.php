@@ -99,40 +99,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         $stmt->close();
     }
+    elseif (isset($_POST['submit']) && $_POST['submit'] == 'delete') {
+        $id = $_POST["id"];
+    
+        // Delete the user
+        $sqlDelete = "DELETE FROM activities WHERE id = ?";
+        $stmtDelete = $conn->prepare($sqlDelete);
+        if ($stmtDelete) {
+            $stmtDelete->bind_param("i", $id);
+            if ($stmtDelete->execute()) {
+                // Close the statement
+                $stmtDelete->close();
+    
+                // Update the IDs of rows with higher IDs
+                $sqlUpdate = "UPDATE activities SET id = id - 1 WHERE id > ?";
+                $stmtUpdate = $conn->prepare($sqlUpdate);
+                if ($stmtUpdate) {
+                    $stmtUpdate->bind_param("i", $id);
+                    $stmtUpdate->execute();
+                    $stmtUpdate->close();
+                } else {
+                    $error = "Error preparing update statement: " . $conn->error;
+                }
+    
+                // Reset the auto-increment value
+                if ($conn->query("ALTER TABLE activities AUTO_INCREMENT = 1")) {
+                    header("Location: activities_management.php");
+                    exit();
+                } else {
+                    $error = "Error resetting auto-increment value: " . $conn->error;
+                }
+            } else {
+                $error = "Error deleting activity: " . $stmtDelete->error;
+            }
+        } else {
+            $error = "Error preparing delete statement: " . $conn->error;
+        }
+        
+        $stmtDelete->close();
+    }
 }
 
 if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
-    if ($_GET['action'] == 'delete' && isset($_GET['id'])) {
-        $id = $_GET['id'];
-
-        // Delete the row
-        $sql_delete = "DELETE FROM activities WHERE id=?";
-        $stmt_delete = $conn->prepare($sql_delete);
-        $stmt_delete->bind_param("i", $id);
-        $stmt_delete->execute();
-        $stmt_delete->close();
-
-        // Retrieve IDs of rows with IDs greater than the deleted row's ID
-        $sql_get_higher_ids = "SELECT id FROM activities WHERE id > ?";
-        $stmt_get_higher_ids = $conn->prepare($sql_get_higher_ids);
-        $stmt_get_higher_ids->bind_param("i", $id);
-        $stmt_get_higher_ids->execute();
-        $result_higher_ids = $stmt_get_higher_ids->get_result();
-
-        // Decrement each ID by 1 and update the database
-        $sql_update_ids = "UPDATE activities SET id = id - 1 WHERE id = ?";
-        $stmt_update_ids = $conn->prepare($sql_update_ids);
-        while ($row_higher_ids = $result_higher_ids->fetch_assoc()) {
-            $stmt_update_ids->bind_param("i", $row_higher_ids['id']);
-            $stmt_update_ids->execute();
-        }
-
-        $sql_reset_auto_increment = "ALTER TABLE activities AUTO_INCREMENT = 1";
-        $conn->query($sql_reset_auto_increment);
-
-        header('Location: activities_management.php');
-        exit();
-    } else if ($_GET['action'] == 'edit' && isset($_GET['id'])) {
+   
+     if ($_GET['action'] == 'edit' && isset($_GET['id'])) {
         $id = $_GET['id'];
         $sql = "SELECT * FROM activities WHERE id=?";
         $stmt = $conn->prepare($sql);
@@ -211,11 +221,13 @@ $result = $conn->query($sql);
 <body id="management_body">
     <section id="management">
         <div class="container">
+        <input type="checkbox" id="menu-toggle" class="menu-toggle">
+        <label for="menu-toggle" class="menu-toggle-label">☰</label>
             <aside class="sidebar">
                 <div class="logo"><img src="../images/logo2.png"></div>
                 <nav>
                     <ul>
-                        <li><a href="index.php">User Management</a></li>
+                        <li><a href="user_management.php">User Management</a></li>
                         <li><a href="#">Enquiry Forms</a></li> 
                         <li><a href="#">Volunteer Forms</a></li>
                         <li><a id="current_tab" href="activities_management.php">Activities</a></li>
@@ -242,7 +254,7 @@ $result = $conn->query($sql);
                         <a class="sort_logout" href="?sort=asc&sortBy=<?php echo $sortBy; ?>">Sort Ascending</a>
                         <a class="sort_logout" href="?sort=desc&sortBy=<?php echo $sortBy; ?>">Sort Descending</a>
                         <a class="sort_logout" href="activities_management.php?action=add">Add New Activity</a>
-                        <a class="sort_logout" href="../index.php">Logout</a>
+                 _       <a class="sort_logout" href="../index.php">Logout</a>
                     </div>
                     <table>
                         <tr>
@@ -266,7 +278,7 @@ $result = $conn->query($sql);
                                 <td>
                                     <a id='edit-button' href='activities_management.php?action=view&id={$row['id']}'>View</a>
                                     <a id='edit-button' href='activities_management.php?action=edit&id={$row['id']}'>Edit</a>
-                                    <a id='delete-button' href='activities_management.php?action=delete&id={$row['id']}'>Delete</a>
+                                    <a id='delete-button' href='activities_management.php?action=confirm_delete&id={$row['id']}'>Delete</a>
                                 </td>
                             </tr>
                             ";
@@ -323,6 +335,20 @@ $result = $conn->query($sql);
                         </div>
                     </div>
                     <?php endif; ?>
+
+                    <?php if(isset($_GET['action']) && ($_GET['action'] == 'confirm_delete' && isset($_GET['id']))) { ?>
+                    <div id="user-edit" class="pop-up" style="display: flex;">
+                        <div class="pop-up-content">
+                            <a class="close-btn" href="activities_management.php">&times;</a>
+                            <form method="post">
+                                <h1>Confrim to Delete!</h1>
+                                <input type="hidden" name="id" value="<?php echo htmlspecialchars($_GET['id']); ?>">
+                                <input type="submit" id='confirm-delete' name="submit" value="delete">
+                                <input type="submit" name="cancel" value="Cancel">
+                            </form>
+                        </div>
+                    </div> 
+                <?php } ?>
                 </section>
             </main>
         </div>

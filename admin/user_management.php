@@ -4,64 +4,97 @@ include "../connection.php";
 
 $id = $userid = $email = $password = $error ="";
 
+
 // Check if form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (isset($_POST['cancel'])) {
-        header("Location: index.php");
-        exit();
-    } else if (isset($_POST['submit']) && $_POST['submit'] == 'Update') {
-        $id = $_POST["id"];
+        header("Location: user_management.php");
+        exit(); 
+    } 
+
+
+    if (isset($_POST["userid"], $_POST["email"], $_POST["password"])) {
+        // Assign values if they are set
         $userid = $_POST["userid"];
         $email = $_POST["email"];
         $password = $_POST["password"];
+    }    
 
-        $sql = "UPDATE users SET userid=?, email=?, password=? WHERE id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sssi",$userid, $email, $password, $id);
-        $stmt->execute();
+    if (empty($userid) || empty($email) || empty($password)) {
+        $error = "Please fill in all the required fields.";
+    } else {
+        $password_hashed = password_hash($password, PASSWORD_BCRYPT);
+        
+        if (isset($_POST['submit']) && $_POST['submit'] == 'Update') {
+            $id = $_POST["id"];
+            $sql = "UPDATE users SET userid=?, email=?, password=?, password_hashed=? WHERE id=?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssssi", $userid, $email, $password, $password_hashed, $id);
+            $stmt->execute();
 
-        if ($stmt->affected_rows > 0) {
-            header("Location: index.php");
-            exit();
-        } else {
-            $error = "Error updating user. No changes were made or the user does not exist.";
-        }
-        $stmt->close();
-    } else if (isset($_POST['submit']) && $_POST['submit'] == 'Create') {
-        $userid = $_POST["userid"];
-        $email = $_POST["email"];
-        $password = $_POST["password"];
-
-        $sql = "INSERT INTO users (userid, email, password) VALUES (?, ?, ?)";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("sss", $userid, $email, $password);
-        if ($stmt->execute()) {
-            header("Location: index.php");
-            exit();
-        } else {
-            $error = "Error creating user.";
-        }
-        $stmt->close();
+            if ($stmt->affected_rows > 0) {
+                header("Location: user_management.php");
+                exit();
+            } else {
+                $error = "Error updating user. No changes were made or the user does not exist.";
+            }
+            $stmt->close();
+        } else if (isset($_POST['submit']) && $_POST['submit'] == 'Create') {
+        
+            $sql = "INSERT INTO users (userid, email, password, password_hash) VALUES (?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ssss", $userid, $email, $password, $password_hashed);
+            if ($stmt->execute()) {
+                header("Location: user_management.php");
+                exit();
+            } else {
+                $error = "Error creating user.";
+            }
+            $stmt->close();
+        }      
     }
 
-    else if (isset($_POST['submit']) && $_POST['submit'] == 'delete') {
+    if (isset($_POST['submit']) && $_POST['submit'] == 'delete') {
         $id = $_POST["id"];
-
-        $sql = "DELETE FROM users WHERE id = ?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $id);
-        if ($stmt->execute()) {
-            // Adjust the auto-increment value
-            $conn->query("ALTER TABLE users AUTO_INCREMENT = 1");
-
-            header("Location: index.php");
-            exit();
+    
+        // Delete the user
+        $sqlDelete = "DELETE FROM users WHERE id = ?";
+        $stmtDelete = $conn->prepare($sqlDelete);
+        if ($stmtDelete) {
+            $stmtDelete->bind_param("i", $id);
+            if ($stmtDelete->execute()) {
+                // Close the statement
+                $stmtDelete->close();
+    
+                // Update the IDs of rows with higher IDs
+                $sqlUpdate = "UPDATE users SET id = id - 1 WHERE id > ?";
+                $stmtUpdate = $conn->prepare($sqlUpdate);
+                if ($stmtUpdate) {
+                    $stmtUpdate->bind_param("i", $id);
+                    $stmtUpdate->execute();
+                    $stmtUpdate->close();
+                } else {
+                    $error = "Error preparing update statement: " . $conn->error;
+                }
+    
+                // Reset the auto-increment value
+                if ($conn->query("ALTER TABLE users AUTO_INCREMENT = 1")) {
+                    header("Location: user_management.php");
+                    exit();
+                } else {
+                    $error = "Error resetting auto-increment value: " . $conn->error;
+                }
+            } else {
+                $error = "Error deleting user: " . $stmtDelete->error;
+            }
         } else {
-            $error = "Error deleting user.";
+            $error = "Error preparing delete statement: " . $conn->error;
         }
-        $stmt->close();
+
+        $stmtDelete->close();
     }
-}
+
+}    
 
 if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
     
@@ -93,26 +126,29 @@ if ($_SERVER["REQUEST_METHOD"] == "GET" && isset($_GET['action'])) {
 // Initialize $sortBy and $sortOrder with default values
 $sortBy = "id";
 $sortOrder = "ASC";
+$search = "";
 
 // Check if sorting order is provided in the URL
-
-
-// Check if sorting column is provided in the URL
 if (isset($_GET['sortBy'])) {
-    // Assign the value from the query string to $sortBy
     $sortBy = $_GET['sortBy'];
-
-    // Additional validation if necessary
-    // For example, you might want to ensure that $sortBy is one of the allowed values
-    // You can use a switch statement or if conditions for this purpose
 }
 
 if (isset($_GET['sort']) && ($_GET['sort'] == 'asc' || $_GET['sort'] == 'desc')) {
     $sortOrder = ($_GET['sort'] == 'desc') ? 'DESC' : 'ASC';
 }
 
-// Construct SQL query based on $sortBy and $sortOrder
-$sql = "SELECT * FROM users ORDER BY $sortBy $sortOrder";
+// Check if search query is provided in the URL
+if (isset($_GET['search'])) {
+    $search = $conn->real_escape_string($_GET['search']);
+}
+
+// Construct SQL query based on $sortBy, $sortOrder, and $search
+if (!empty($search)) {
+    $sql = "SELECT * FROM users WHERE userid LIKE '%$search%' ORDER BY $sortBy $sortOrder";
+} else {
+    $sql = "SELECT * FROM users ORDER BY $sortBy $sortOrder";
+}
+
 $result = $conn->query($sql);
 ?>
 
@@ -155,7 +191,12 @@ $result = $conn->query($sql);
         <main>
             <section class="user-management">
             <h1>User Management</h1>
-                <div id="table_top">                  
+                <div id="table_top">    
+                    <form method="GET" action="user_management
+                    .php" id="search_form">
+                        <input type="text" name="search" placeholder="Search by UserID" value="<?php echo isset($_GET['search']) ? htmlspecialchars($_GET['search']) : ''; ?>">
+                        <input type="submit" value="Search">
+                    </form>              
                     <div class="dropdown">
                     <button class="dropbtn">Sort By: <?php echo strtoupper($sortBy); ?></button>
                         <div class="dropdown-content">
@@ -166,7 +207,7 @@ $result = $conn->query($sql);
                     </div>
                     <a class="sort_logout" href="?sort=asc&sortBy=<?php echo $sortBy; ?>">Sort Ascending</a>
                     <a class="sort_logout" href="?sort=desc&sortBy=<?php echo $sortBy; ?>">Sort Descending</a>
-                    <a class="sort_logout" href="index.php?action=add">Add New User</a>  
+                    <a class="sort_logout" href="user_management.php?action=add">Add New User</a>  
                     <a class="sort_logout" href="../index.php">Logout</a>
                 </div>    
                 <table>
@@ -197,8 +238,9 @@ $result = $conn->query($sql);
                                 echo "
                                
                                 
-                                    <a id='edit-button' href='index.php?action=edit&id={$row['id']}'>Edit</a>
-                                    <a id='delete-button' href='index.php?action=confirm_delete&id={$row['id']}'>Delete</a>";
+                                    <a id='edit-button' href='user_management
+                                    .php?action=edit&id={$row['id']}'>Edit</a>
+                                    <a id='delete-button' href='user_management.php?action=confirm_delete&id={$row['id']}'>Delete</a>";
                                 }
                                 echo"
                                 </td>
@@ -219,7 +261,9 @@ $result = $conn->query($sql);
                 <?php if (isset($_GET['action']) && ($_GET['action'] == 'add' || ($_GET['action'] == 'edit' && isset($_GET['id'])))): ?>
                     <div id="user-edit" class="pop-up" style="display: flex;">
                         <div class="pop-up-content">
-                            <a class="close-btn" href="index.php">&times;</a>                            
+                            <a class="close-btn" href="user_management
+                            .php">&times;</a> 
+                            <?php if (!empty($error)) echo "<p style='color: red;'>$error</p>"; ?>                           
                             <form method="post">
                                 <h1><?php echo $_GET['action'] == 'edit' ? 'Update User\'s Info' : 'Create New User'; ?></h1>
                                 <?php if ($_GET['action'] == 'edit'): ?>
@@ -242,7 +286,7 @@ $result = $conn->query($sql);
                 <?php if(isset($_GET['action']) && ($_GET['action'] == 'confirm_delete' && isset($_GET['id']))) { ?>
                     <div id="user-edit" class="pop-up" style="display: flex;">
                         <div class="pop-up-content">
-                            <a class="close-btn" href="index.php">&times;</a>
+                            <a class="close-btn" href="user_management.php">&times;</a>
                             <form method="post">
                                 <h1>Confrim to Delete!</h1>
                                 <input type="hidden" name="id" value="<?php echo htmlspecialchars($_GET['id']); ?>">
